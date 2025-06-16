@@ -18,32 +18,14 @@ OLLAMA_API_URL = "http://localhost:11434/api/unload"
 # Setup logging to output to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def unload_ollama_model(model_name, api_url):
-    """
-    Sends a request to the Ollama API to unload a specific model to free up VRAM.
-    """
-    try:
-        payload = {"name": model_name}
-        logging.info(f"Attempting to unload Ollama model '{model_name}' to free VRAM...")
-        response = requests.post(api_url, json=payload, timeout=15)
-        
-        if response.status_code == 200:
-            logging.info(f"Request to unload Ollama model '{model_name}' sent successfully.")
-        elif response.status_code == 404:
-            logging.info(f"Ollama model '{model_name}' was not loaded, so no action was needed.")
-        else:
-            logging.error(f"Failed to unload Ollama model '{model_name}'. Status: {response.status_code}, Response: {response.text}")
-            
-    except requests.exceptions.RequestException:
-        logging.warning(f"Could not connect to Ollama server at {api_url} to unload model. It may not be running.")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while trying to unload Ollama model: {e}")
+def unload_ollama_model(model_name):
+    os.system(f"ollama stop {model_name}")
 
 def process_audio(input_audio_path):
     """
     Processes a single audio file for speaker diarization and transcription.
     """
-    unload_ollama_model(OLLAMA_MODEL_TO_UNLOAD, OLLAMA_API_URL)
+    unload_ollama_model(OLLAMA_MODEL_TO_UNLOAD)
 
     if not os.path.exists(input_audio_path):
         logging.error(f"Input file not found: {input_audio_path}")
