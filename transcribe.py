@@ -1,4 +1,5 @@
 # transcribe.py - v3.1 with missing import fixed
+# (Updated for sequential model loading/unloading)
 
 import torch
 import torchaudio
@@ -8,7 +9,7 @@ import logging
 import traceback
 import requests
 import json
-from pyannote.audio import Pipeline  # <-- THIS WAS THE MISSING LINE
+from pyannote.audio import Pipeline
 from faster_whisper import WhisperModel
 
 # --- Configuration ---
@@ -19,11 +20,14 @@ OLLAMA_API_URL = "http://localhost:11434/api/unload"
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def unload_ollama_model(model_name):
+    # This function seems to be for Ollama, not the PyTorch models themselves.
+    # Keep it as is, but it's separate from PyTorch VRAM management.
     os.system(f"ollama stop {model_name}")
 
 def process_audio(input_audio_path):
     """
-    Processes a single audio file for speaker diarization and transcription.
+    Processes a single audio file for speaker diarization and transcription,
+    sequentially loading and unloading models to manage VRAM.
     """
     unload_ollama_model(OLLAMA_MODEL_TO_UNLOAD)
 
@@ -47,32 +51,44 @@ def process_audio(input_audio_path):
         logging.info("Audio is already mono.")
         audio_to_process = input_audio_path
     
-    logging.info("Attempting to load diarization and ASR models...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cuda":
-        torch.cuda.empty_cache()
-        logging.info("Cleared PyTorch CUDA cache.")
-
     compute_type = "float16" if device == "cuda" else "int8"
-    
+
+    # --- Diarization Phase ---
+    logging.info("Attempting to load diarization pipeline...")
     diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     if device == "cuda":
         diarization_pipeline = diarization_pipeline.to(torch.device("cuda"))
+        torch.cuda.empty_cache() # Clear cache after moving to GPU
     logging.info("Diarization pipeline loaded successfully.")
-
-    model_size = "large-v3"
-    asr_model = WhisperModel(model_size, device=device, compute_type=compute_type)
-    logging.info(f"Whisper model '{model_size}' loaded successfully.")
 
     logging.info(f"Running speaker diarization on {audio_to_process}...")
     diarization_result = diarization_pipeline(audio_to_process)
+    logging.info("Diarization complete.")
+
+    # Explicitly unload diarization model to free VRAM
+    logging.info("Unloading diarization model and clearing CUDA cache...")
+    if device == "cuda":
+        diarization_pipeline.to(torch.device("cpu")) # Move to CPU
+    del diarization_pipeline # Delete the object
+    if device == "cuda":
+        torch.cuda.empty_cache() # Clear CUDA cache
+    logging.info("Diarization model unloaded.")
+
+    # --- Transcription Phase ---
+    logging.info("Attempting to load Whisper ASR model...")
+    model_size = "large-v3"
+    asr_model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    if device == "cuda":
+        torch.cuda.empty_cache() # Clear cache after loading (might be needed if cache fills up from loading)
+    logging.info(f"Whisper model '{model_size}' loaded successfully.")
     
     logging.info(f"Running transcription on {audio_to_process}...")
     segments, _ = asr_model.transcribe(audio_to_process, word_timestamps=True)
-    
-    all_words = [word._asdict() for segment in segments for word in segment.words]
-    logging.info("Diarization and transcription complete.")
+    logging.info("Transcription complete.")
 
+    all_words = [word._asdict() for segment in segments for word in segment.words]
+    
     def get_words_in_segment(word_list, start_time, end_time):
         segment_words = [
             word_info['word'] for word_info in word_list 
