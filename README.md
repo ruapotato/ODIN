@@ -77,7 +77,8 @@ Currently, the core processing logic exists in a single Python script.
 3.  Run the script from your terminal:
     ```bash
     source ./pyenv/bin/activate
-    export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+    #Edit with your install path
+    export LD_LIBRARY_PATH=/home/hamner/ODIN/pyenv/lib/python3.12/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
     python main.py
     ```
 4.  The script will automatically handle stereo-to-mono conversion and print the final, speaker-labeled transcript to the console.
