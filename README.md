@@ -26,6 +26,7 @@ This project relies on a modern, robust stack for audio processing:
   * An NVIDIA GPU with the appropriate CUDA drivers installed.
 
 ### Step-by-Step Setup
+0. `sudo apt update && sudo apt install ffmpeg`
 
 1.  **Create and Activate a Virtual Environment:**
 
