@@ -1,99 +1,147 @@
-import torch
-import torchaudio
+# ODIN Web Interface
+# main.py
+
+from flask import Flask, render_template, request, jsonify
 import os
-from pyannote.audio import Pipeline
-from faster_whisper import WhisperModel
-import json # To help with inspecting the output
+import subprocess
+import requests
+import json
+from werkzeug.utils import secure_filename
 
-# --- 1. Setup ---
-# Select the most powerful Whisper model
-MODEL_SIZE = "large-v3"
-# Set your local audio file
-ORIGINAL_AUDIO_FILE = "/home/david/Downloads/test.wav"
+# --- Configuration ---
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'wav', 'mp3', 'm4a', 'mp4', 'mov', 'avi'}
+OLLAMA_API_URL = "http://localhost:11434/api/generate" # Default Ollama API URL
+OLLAMA_MODEL = "mistral" # The model to use for report generation
 
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 500  # 500 MB upload limit
 
-# --- 2. Preprocess Audio to Ensure it is Mono ---
-# This part remains the same as it's a best practice
-AUDIO_FILE = os.path.splitext(ORIGINAL_AUDIO_FILE)[0] + "_mono.wav"
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-print(f"Loading audio from: {ORIGINAL_AUDIO_FILE}")
-waveform, sample_rate = torchaudio.load(ORIGINAL_AUDIO_FILE)
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-if waveform.shape[0] > 1:
-    print("Audio is stereo. Converting to mono.")
-    waveform = torch.mean(waveform, dim=0, keepdim=True)
-    torchaudio.save(AUDIO_FILE, waveform, sample_rate)
-    print(f"Mono audio saved to: {AUDIO_FILE}")
-else:
-    print("Audio is already mono.")
-    AUDIO_FILE = ORIGINAL_AUDIO_FILE
-
-# --- 3. Load Models ---
-
-# Load Diarization Pipeline
-print("Loading diarization pipeline...")
-# IMPORTANT: Enter your Hugging Face access token here if prompted or ensure it's in your environment
-# For example: diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="YOUR_HF_TOKEN")
-diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
-
-if torch.cuda.is_available():
-    diarization_pipeline = diarization_pipeline.to(torch.device("cuda"))
-    print("Diarization pipeline moved to GPU.")
-
-# Load ASR Model (Whisper)
-print(f"Loading Whisper model: {MODEL_SIZE}...")
-# The model will be downloaded automatically on the first run.
-# To use GPU, set compute_type="float16". For CPU, compute_type="int8"
-device = "cuda" if torch.cuda.is_available() else "cpu"
-compute_type = "float16" if torch.cuda.is_available() else "int8"
-asr_model = WhisperModel(MODEL_SIZE, device=device, compute_type=compute_type)
-print("Whisper model loaded.")
+def convert_video_to_audio(video_path, audio_path):
+    """Converts video file to a WAV audio file using ffmpeg."""
+    try:
+        # Command to convert video to WAV, mono, 16kHz sample rate
+        command = [
+            'ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', 
+            '-ar', '16000', '-ac', '1', audio_path
+        ]
+        app.logger.info(f"Running ffmpeg command: {' '.join(command)}")
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        app.logger.info(f"Successfully converted {video_path} to {audio_path}")
+        return True
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"ffmpeg error: {e.stderr}")
+        return False
+    except FileNotFoundError:
+        app.logger.error("ffmpeg not found. Please ensure ffmpeg is installed and in your system's PATH.")
+        return False
 
 
-# --- 4. Run Pipelines ---
+@app.route('/')
+def index():
+    """Renders the main user interface."""
+    return render_template('index.html', default_prompt="Generate a detailed police report from the following audio transcript. The report should be objective, chronological, and suitable for official records. Identify all speakers and summarize the key events and statements.")
 
-# A. Run Speaker Diarization
-print(f"Running speaker diarization on {AUDIO_FILE}...")
-diarization_result = diarization_pipeline(AUDIO_FILE)
-print("Diarization complete.")
+@app.route('/upload', methods=['POST'])
+def upload_and_transcribe():
+    """Handles file upload, conversion (if needed), and transcription."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if not file or not allowed_file(file.filename):
+        return jsonify({"error": "File type not allowed"}), 400
 
-# B. Run Transcription with Word Timestamps
-print(f"Running transcription on {AUDIO_FILE}...")
-# Set word_timestamps=True to get word-level timestamps
-segments, info = asr_model.transcribe(AUDIO_FILE, word_timestamps=True)
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    app.logger.info(f"File saved to {filepath}")
 
-# Flatten the list of all words from all segments
-all_words = []
-for segment in segments:
-    for word in segment.words:
-        all_words.append(word._asdict()) # Use ._asdict() to get a dictionary representation
-print("Transcription complete.")
-
-
-# --- 5. Merge Diarization and Transcription ---
-
-def get_words_in_segment(word_list, start_time, end_time):
-    """Helper function to find words within a given diarization segment."""
-    segment_words = []
-    for word_info in word_list:
-        # Check if the word's start or end time falls within the segment
-        if (word_info['start'] >= start_time and word_info['start'] <= end_time) or \
-           (word_info['end'] >= start_time and word_info['end'] <= end_time):
-            segment_words.append(word_info['word'])
+    base, ext = os.path.splitext(filepath)
+    audio_path = filepath
     
-    # We strip leading/trailing spaces from the words themselves
-    return ' '.join(word.strip() for word in segment_words)
+    # Convert video to audio if necessary
+    if ext.lower() in ['.mp4', '.mov', '.avi']:
+        app.logger.info("Video file detected, converting to audio...")
+        audio_path = base + '.wav'
+        if not convert_video_to_audio(filepath, audio_path):
+            return jsonify({"error": "Failed to convert video to audio. Is ffmpeg installed?"}), 500
 
+    # Run transcription as a separate process to manage memory
+    try:
+        app.logger.info("Starting transcription process...")
+        script_path = os.path.join(os.path.dirname(__file__), 'transcribe.py')
+        subprocess.run(['python', script_path, audio_path], check=True)
+        app.logger.info("Transcription process finished.")
+        
+        # Read the resulting transcript file
+        transcript_path = base + '.txt'
+        with open(transcript_path, 'r') as f:
+            transcript = f.read()
+        
+        return jsonify({"transcript": transcript})
 
-print("\n--- Full Transcript with Speakers ---")
-for turn, _, speaker in diarization_result.itertracks(yield_label=True):
-    start_time = turn.start
-    end_time = turn.end
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"Transcription script failed: {e}")
+        return jsonify({"error": "Transcription failed. Check server logs."}), 500
+    except FileNotFoundError:
+        app.logger.error("Transcript file not found.")
+        return jsonify({"error": "Could not find transcript output file."}), 500
+
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+    """Generates a report by calling the Ollama API."""
+    data = request.get_json()
+    if not all(k in data for k in ['transcript', 'prompt', 'notes']):
+        return jsonify({"error": "Missing data for report generation."}), 400
+
+    transcript = data['transcript']
+    prompt_template = data['prompt']
+    officer_notes = data['notes']
+
+    # Construct the full prompt for Ollama
+    full_prompt = (
+        f"{prompt_template}\n\n"
+        f"--- AUDIO TRANSCRIPT ---\n{transcript}\n\n"
+        f"--- OFFICER'S NOTES ---\n{officer_notes}\n\n"
+        f"--- END OF DATA ---\n\n"
+        "Generate the report now:"
+    )
     
-    # Get the transcribed text for the current speaker segment
-    segment_text = get_words_in_segment(all_words, start_time, end_time)
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": full_prompt,
+        "stream": False,
+        # "keep_alive": 0 # Use this to unload the model after generation if VRAM is extremely tight
+    }
 
-    if segment_text: # Only print if there is text in the segment
-        print(f"[{start_time:.3f}s --> {end_time:.3f}s] {speaker}:{segment_text}")
+    try:
+        app.logger.info(f"Sending request to Ollama with model {OLLAMA_MODEL}...")
+        response = requests.post(OLLAMA_API_URL, json=payload, timeout=300)
+        response.raise_for_status() # Raise an exception for bad status codes
+        
+        # The response from Ollama is a JSON object, with the content in the 'response' key
+        response_data = response.json()
+        report = response_data.get("response", "Error: No response content from model.")
+        
+        return jsonify({"report": report.strip()})
+        
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Could not connect to Ollama API: {e}")
+        return jsonify({"error": f"Failed to connect to Ollama at {OLLAMA_API_URL}. Is it running?"}), 500
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred: {e}")
+        return jsonify({"error": "An unexpected error occurred during report generation."}), 500
 
-print("\n--- End of Transcript ---")
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5001)
