@@ -8,6 +8,7 @@ import logging
 import traceback
 import requests  # Added for API calls
 import json      # Added for API calls
+from pyannote.audio import Pipeline
 
 # --- Configuration ---
 OLLAMA_MODEL_TO_UNLOAD = "mistral"
