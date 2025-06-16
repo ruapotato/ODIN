@@ -3,88 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ODIN - Report Generator</title>
+    <title>ODIN - Collaborative Report Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
-        .container { max-width: 960px; }
+        .container { max-width: 1140px; }
         .spinner-border { width: 3rem; height: 3rem; }
-        #loader {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1050;
-            display: none; /* Hidden by default */
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            color: white;
-        }
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 1050; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; }
         #loader p { margin-top: 1rem; font-size: 1.2rem; }
+        .form-control[readonly] { background-color: #e9ecef; }
+        .nav-tabs .nav-link { color: #495057; }
+        .nav-tabs .nav-link.active { color: #000; font-weight: bold; }
+        /* Style for the edit log */
+        #edit-log-list { padding-left: 1.2rem; }
+        #edit-log-list li { margin-bottom: 0.5rem; }
     </style>
 </head>
 <body>
-    <div id="loader">
-        <div class="spinner-border text-light" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-        <p id="loader-message">Processing...</p>
-    </div>
+    <div id="loader"><div class="spinner-border text-light"></div><p id="loader-message">Processing...</p></div>
 
     <div class="container mt-4">
         <div class="text-center p-3 mb-4 bg-light rounded-3">
-            <h1 class="display-5">ODIN: Observational Diarization and Insight Network</h1>
-            <p class="lead">Upload a media file to generate a speaker-labeled transcript, then create a polished report.</p>
+            <h1 class="display-5">ODIN: Collaborative Report Generator</h1>
+            <p class="lead">Upload media, review the AI transcript, and collaboratively build a polished report.</p>
         </div>
 
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3>Step 1: Upload Media & Transcribe</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header"><strong>Step 1: Upload Media</strong></div>
+                    <div class="card-body">
+                        <form id="upload-form">
+                            <input class="form-control mb-2" type="file" id="file-input" name="file" accept=".wav,.mp3,.m4a,.mp4,.mov,.avi">
+                            <button type="submit" class="btn btn-primary w-100">Upload & Transcribe</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card mb-4">
+                    <div class="card-header"><strong>Report Version History</strong></div>
+                    <div class="card-body">
+                        <p id="version-status">No versions yet.</p>
+                        <button id="revert-button" class="btn btn-secondary w-100" disabled>Revert to Previous Version</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><strong>Edit Log</strong></div>
+                    <div class="card-body">
+                        <ol id="edit-log-list">
+                            <li class="text-muted">No edits made yet.</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <form id="upload-form">
-                    <div class="mb-3">
-                        <label for="file-input" class="form-label">Select Audio or Video File</label>
-                        <input class="form-control" type="file" id="file-input" name="file" accept=".wav,.mp3,.m4a,.mp4,.mov,.avi">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Upload and Transcribe</button>
-                </form>
-            </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h3>Step 2: Review, Edit, and Generate Report</h3>
-            </div>
-            <div class="card-body">
-                <form id="report-form">
-                    <div class="mb-3">
-                        <label for="transcript-box" class="form-label"><strong>Editable Transcript / Final Report</strong></label>
-                        <textarea class="form-control" id="transcript-box" rows="15" placeholder="Transcript will appear here after processing..."></textarea>
+            <div class="col-md-8">
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="collab-tab" data-bs-toggle="tab" data-bs-target="#collab-panel" type="button" role="tab">Report Collaboration</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript-panel" type="button" role="tab">Original AI Transcript</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="myTabContent">
+                    <div class="tab-pane fade show active" id="collab-panel" role="tabpanel">
+                        <div class="card card-body border-top-0">
+                            <form id="report-form">
+                                <div class="mb-3">
+                                    <label for="report-box" class="form-label"><strong>Editable Report Draft</strong></label>
+                                    <textarea class="form-control" id="report-box" rows="15" placeholder="Upload a file and generate the first report."></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="notes-box" class="form-label"><strong>Officer's Top-Level Notes</strong></label>
+                                    <textarea class="form-control" id="notes-box" rows="3" placeholder="Add persistent context or notes here..."></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="prompt-box" class="form-label"><strong>Edit Instruction</strong></label>
+                                    <input type="text" class="form-control" id="prompt-box" placeholder="e.g., The suspect's name is John Smith. Add this to the report.">
+                                </div>
+                                <button type="submit" id="generate-button" class="btn btn-success">Generate / Update Report</button>
+                            </form>
+                        </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label for="notes-box" class="form-label"><strong>Officer's Top-Level Notes</strong></label>
-                        <textarea class="form-control" id="notes-box" rows="4" placeholder="Add any high-level context or summary notes here..."></textarea>
+                    <div class="tab-pane fade" id="transcript-panel" role="tabpanel">
+                        <div class="card card-body border-top-0">
+                             <label for="original-transcript-box" class="form-label"><strong>Read-Only Original Transcript</strong></label>
+                            <textarea class="form-control" id="original-transcript-box" rows="25" readonly placeholder="Original transcript will appear here after upload..."></textarea>
+                        </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label for="prompt-box" class="form-label"><strong>AI Command Prompt</strong></label>
-                        <textarea class="form-control" id="prompt-box" rows="3">{{ default_prompt }}</textarea>
-                    </div>
-
-                    <button type="submit" class="btn btn-success">Generate/Update Report</button>
-                </form>
+                </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // --- UI Element References ---
         const uploadForm = document.getElementById('upload-form');
         const reportForm = document.getElementById('report-form');
-        const fileInput = document.getElementById('file-input');
-        const transcriptBox = document.getElementById('transcript-box');
+        const revertButton = document.getElementById('revert-button');
+        const versionStatus = document.getElementById('version-status');
+        const reportBox = document.getElementById('report-box');
+        const originalTranscriptBox = document.getElementById('original-transcript-box');
+        const promptBox = document.getElementById('prompt-box');
+        const editLogList = document.getElementById('edit-log-list');
         const loader = document.getElementById('loader');
         const loaderMessage = document.getElementById('loader-message');
 
@@ -92,76 +114,115 @@
             loaderMessage.textContent = message;
             loader.style.display = 'flex';
         }
+        function hideLoader() { loader.style.display = 'none'; }
 
-        function hideLoader() {
-            loader.style.display = 'none';
+        function updateVersionDisplay(version) {
+            versionStatus.textContent = version > 0 ? `On Report Version ${version}.` : 'No versions yet.';
+            revertButton.disabled = version < 1;
         }
 
-        // --- Handle Transcription ---
+        // --- NEW: Function to update the Edit Log UI ---
+        function updateEditLog(log) {
+            editLogList.innerHTML = ''; // Clear current list
+            if (log && log.length > 0) {
+                log.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    editLogList.appendChild(li);
+                });
+            } else {
+                editLogList.innerHTML = '<li class="text-muted">No edits made yet.</li>';
+            }
+        }
+
+        // --- Handle Upload and Transcription ---
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData();
-            if (fileInput.files.length === 0) {
-                alert('Please select a file first.');
-                return;
-            }
-            formData.append('file', fileInput.files[0]);
-
+            // ... (rest of the submit logic)
+            const fileInput = document.getElementById('file-input');
+            if (fileInput.files.length === 0) { alert('Please select a file.'); return; }
+            
+            const formData = new FormData(uploadForm);
             showLoader('Uploading and transcribing... This may take several minutes.');
             
             try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData,
-                });
-
+                const response = await fetch('/upload', { method: 'POST', body: formData });
                 const result = await response.json();
 
                 if (response.ok) {
-                    transcriptBox.value = result.transcript;
+                    originalTranscriptBox.value = result.original_transcript;
+                    reportBox.value = ''; 
+                    promptBox.value = 'Generate the initial police report.';
+                    updateVersionDisplay(0);
+                    updateEditLog(result.edit_log); // Update log UI
+                    alert('Transcription complete. You can now generate the initial report.');
                 } else {
                     alert(`Error: ${result.error}`);
                 }
             } catch (error) {
-                console.error('Upload Error:', error);
-                alert('An unexpected error occurred during upload. Check the console.');
+                alert('An unexpected error during upload.');
             } finally {
                 hideLoader();
             }
         });
 
-        // --- Handle Report Generation ---
+        // --- Handle Report Generation/Update ---
         reportForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const transcript = document.getElementById('transcript-box').value;
-            const prompt = document.getElementById('prompt-box').value;
-            const notes = document.getElementById('notes-box').value;
+            // ... (rest of the submit logic)
+            if (!originalTranscriptBox.value) { alert('Please upload and transcribe a file first.'); return; }
+            if (!promptBox.value) { alert('Please provide an edit instruction.'); return; }
 
-            if (!transcript) {
-                alert('The transcript box is empty. Please process a file first.');
-                return;
-            }
-
-            showLoader('Generating report with Ollama...');
+            showLoader('Generating report with AI...');
+            
+            const payload = {
+                current_report: reportBox.value,
+                prompt: promptBox.value,
+                notes: document.getElementById('notes-box').value
+            };
 
             try {
                 const response = await fetch('/generate_report', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ transcript, prompt, notes }),
+                    body: JSON.stringify(payload),
                 });
-
                 const result = await response.json();
 
                 if (response.ok) {
-                    // Populate the main text box with the generated report
-                    transcriptBox.value = result.report;
+                    reportBox.value = result.report;
+                    updateVersionDisplay(result.version);
+                    updateEditLog(result.edit_log); // Update log UI
+                    promptBox.value = ''; 
                 } else {
                     alert(`Error: ${result.error}`);
                 }
             } catch (error) {
-                console.error('Report Generation Error:', error);
-                alert('An unexpected error occurred during report generation. Check the console.');
+                alert('An unexpected error during report generation.');
+            } finally {
+                hideLoader();
+            }
+        });
+
+        // --- Handle Revert ---
+        revertButton.addEventListener('click', async () => {
+            // ... (rest of the revert logic)
+            if (!confirm('Are you sure you want to revert to the previous version?')) return;
+
+            showLoader('Reverting report...');
+            try {
+                const response = await fetch('/revert', { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok) {
+                    reportBox.value = result.report;
+                    updateVersionDisplay(result.version);
+                    updateEditLog(result.edit_log); // Update log UI
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                alert('An unexpected error while reverting.');
             } finally {
                 hideLoader();
             }
