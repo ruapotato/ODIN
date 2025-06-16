@@ -29,7 +29,7 @@ This project relies on a modern, robust stack for audio processing:
 
 1.  **Create and Activate a Virtual Environment:**
 
-    ```bash
+    ```
     # Create a virtual environment in a folder named .venv
     python3 -m venv pyenv
 
@@ -40,9 +40,9 @@ This project relies on a modern, robust stack for audio processing:
 2.  **Install PyTorch with CUDA Support:**
     Install the stable version of PyTorch that matches your system's CUDA toolkit. The following command is for a system with CUDA 12.1 drivers.
 
-    ```bash
+    ```
     # For CUDA 12.1 - check the PyTorch website for other versions
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    pip install torch torchvision torchaudio
     ```
 
 3.  **Install Project Libraries:**
@@ -61,7 +61,7 @@ This project relies on a modern, robust stack for audio processing:
 
     <!-- end list -->
 
-    ```bash
+    ```
     pip install huggingface_cli
     huggingface-cli login
     ```
