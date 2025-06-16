@@ -14,7 +14,6 @@
         .form-control[readonly] { background-color: #e9ecef; }
         .nav-tabs .nav-link { color: #495057; }
         .nav-tabs .nav-link.active { color: #000; font-weight: bold; }
-        /* Style for the edit log */
         #edit-log-list { padding-left: 1.2rem; }
         #edit-log-list li { margin-bottom: 0.5rem; }
     </style>
@@ -34,61 +33,51 @@
                     <div class="card-header"><strong>Step 1: Upload Media</strong></div>
                     <div class="card-body">
                         <form id="upload-form">
-                            <input class="form-control mb-2" type="file" id="file-input" name="file" accept=".wav,.mp3,.m4a,.mp4,.mov,.avi">
+                            <input class="form-control mb-2" type="file" id="file-input" name="file">
                             <button type="submit" class="btn btn-primary w-100">Upload & Transcribe</button>
                         </form>
                     </div>
                 </div>
                 <div class="card mb-4">
-                    <div class="card-header"><strong>Report Version History</strong></div>
+                    <div class="card-header"><strong>Controls & History</strong></div>
                     <div class="card-body">
                         <p id="version-status">No versions yet.</p>
-                        <button id="revert-button" class="btn btn-secondary w-100" disabled>Revert to Previous Version</button>
+                        <button id="revert-button" class="btn btn-secondary w-100 mb-2" disabled>Revert to Previous Version</button>
+                        <a id="export-button" class="btn btn-info w-100" href="/export" target="_blank">Export Final Report</a>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-header"><strong>Edit Log</strong></div>
                     <div class="card-body">
-                        <ol id="edit-log-list">
-                            <li class="text-muted">No edits made yet.</li>
-                        </ol>
+                        <ol id="edit-log-list"><li class="text-muted">No edits made yet.</li></ol>
                     </div>
                 </div>
             </div>
 
             <div class="col-md-8">
-                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                 <ul class="nav nav-tabs" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="collab-tab" data-bs-toggle="tab" data-bs-target="#collab-panel" type="button" role="tab">Report Collaboration</button>
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#collab-panel">Report Collaboration</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript-panel" type="button" role="tab">Original AI Transcript</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#transcript-panel">Original AI Transcript</button>
                     </li>
                 </ul>
                 <div class="tab-content" id="myTabContent">
                     <div class="tab-pane fade show active" id="collab-panel" role="tabpanel">
                         <div class="card card-body border-top-0">
                             <form id="report-form">
-                                <div class="mb-3">
-                                    <label for="report-box" class="form-label"><strong>Editable Report Draft</strong></label>
-                                    <textarea class="form-control" id="report-box" rows="15" placeholder="Upload a file and generate the first report."></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="notes-box" class="form-label"><strong>Officer's Top-Level Notes</strong></label>
-                                    <textarea class="form-control" id="notes-box" rows="3" placeholder="Add persistent context or notes here..."></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="prompt-box" class="form-label"><strong>Edit Instruction</strong></label>
-                                    <input type="text" class="form-control" id="prompt-box" placeholder="e.g., The suspect's name is John Smith. Add this to the report.">
-                                </div>
-                                <button type="submit" id="generate-button" class="btn btn-success">Generate / Update Report</button>
+                                <div class="mb-3"><label for="report-box" class="form-label"><strong>Editable Report Draft</strong></label><textarea class="form-control" id="report-box" rows="15"></textarea></div>
+                                <div class="mb-3"><label for="notes-box" class="form-label"><strong>Officer's Top-Level Notes</strong></label><textarea class="form-control" id="notes-box" rows="3"></textarea></div>
+                                <div class="mb-3"><label for="prompt-box" class="form-label"><strong>Edit Instruction</strong></label><input type="text" class="form-control" id="prompt-box"></div>
+                                <button type="submit" class="btn btn-success">Generate / Update Report</button>
                             </form>
                         </div>
                     </div>
                     <div class="tab-pane fade" id="transcript-panel" role="tabpanel">
                         <div class="card card-body border-top-0">
                              <label for="original-transcript-box" class="form-label"><strong>Read-Only Original Transcript</strong></label>
-                            <textarea class="form-control" id="original-transcript-box" rows="25" readonly placeholder="Original transcript will appear here after upload..."></textarea>
+                            <textarea class="form-control" id="original-transcript-box" rows="25" readonly></textarea>
                         </div>
                     </div>
                 </div>
@@ -99,133 +88,96 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // --- UI Element References ---
-        const uploadForm = document.getElementById('upload-form');
         const reportForm = document.getElementById('report-form');
+        const reportBox = document.getElementById('report-box');
+        const promptBox = document.getElementById('prompt-box');
+        // ... (other references)
+        const uploadForm = document.getElementById('upload-form');
         const revertButton = document.getElementById('revert-button');
         const versionStatus = document.getElementById('version-status');
-        const reportBox = document.getElementById('report-box');
         const originalTranscriptBox = document.getElementById('original-transcript-box');
-        const promptBox = document.getElementById('prompt-box');
         const editLogList = document.getElementById('edit-log-list');
         const loader = document.getElementById('loader');
         const loaderMessage = document.getElementById('loader-message');
 
-        function showLoader(message) {
-            loaderMessage.textContent = message;
-            loader.style.display = 'flex';
-        }
-        function hideLoader() { loader.style.display = 'none'; }
+        // --- State Variable for Manual Edit Tracking ---
+        let lastAiReport = "";
 
-        function updateVersionDisplay(version) {
-            versionStatus.textContent = version > 0 ? `On Report Version ${version}.` : 'No versions yet.';
-            revertButton.disabled = version < 1;
-        }
-
-        // --- NEW: Function to update the Edit Log UI ---
-        function updateEditLog(log) {
-            editLogList.innerHTML = ''; // Clear current list
-            if (log && log.length > 0) {
-                log.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    editLogList.appendChild(li);
-                });
-            } else {
-                editLogList.innerHTML = '<li class="text-muted">No edits made yet.</li>';
-            }
-        }
-
-        // --- Handle Upload and Transcription ---
+        function showLoader(message) { /* ... */ loaderMessage.textContent = message; loader.style.display = 'flex'; }
+        function hideLoader() { /* ... */ loader.style.display = 'none'; }
+        function updateVersionDisplay(version) { /* ... */ versionStatus.textContent = version > 0 ? `On Report Version ${version}.` : 'No versions yet.'; revertButton.disabled = version < 1; }
+        function updateEditLog(log) { /* ... */ editLogList.innerHTML = ''; if (log && log.length > 0) { log.forEach(item => { const li = document.createElement('li'); li.textContent = item; editLogList.appendChild(li); }); } else { editLogList.innerHTML = '<li class="text-muted">No edits made yet.</li>'; } }
+        
+        // --- Event Handlers ---
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            // ... (rest of the submit logic)
+            // ... (upload logic)
             const fileInput = document.getElementById('file-input');
             if (fileInput.files.length === 0) { alert('Please select a file.'); return; }
-            
             const formData = new FormData(uploadForm);
-            showLoader('Uploading and transcribing... This may take several minutes.');
-            
+            showLoader('Uploading and transcribing...');
             try {
                 const response = await fetch('/upload', { method: 'POST', body: formData });
                 const result = await response.json();
-
                 if (response.ok) {
                     originalTranscriptBox.value = result.original_transcript;
-                    reportBox.value = ''; 
+                    reportBox.value = '';
                     promptBox.value = 'Generate the initial police report.';
+                    lastAiReport = ""; // Reset for new session
                     updateVersionDisplay(0);
-                    updateEditLog(result.edit_log); // Update log UI
+                    updateEditLog(result.edit_log);
                     alert('Transcription complete. You can now generate the initial report.');
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert('An unexpected error during upload.');
-            } finally {
-                hideLoader();
-            }
+                } else { alert(`Error: ${result.error}`); }
+            } catch (error) { alert('An unexpected error during upload.'); } finally { hideLoader(); }
         });
 
-        // --- Handle Report Generation/Update ---
         reportForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            // ... (rest of the submit logic)
             if (!originalTranscriptBox.value) { alert('Please upload and transcribe a file first.'); return; }
             if (!promptBox.value) { alert('Please provide an edit instruction.'); return; }
 
+            let instruction = promptBox.value;
+
+            // --- MANUAL EDIT DETECTION LOGIC ---
+            if (reportBox.value.trim() !== "" && reportBox.value !== lastAiReport) {
+                const manualEditNote = `(User manually edited the report before this instruction)`;
+                instruction = `${manualEditNote} ${instruction}`;
+            }
+            // --- END OF LOGIC ---
+
             showLoader('Generating report with AI...');
-            
             const payload = {
                 current_report: reportBox.value,
-                prompt: promptBox.value,
+                prompt: instruction, // Send the potentially modified instruction
                 notes: document.getElementById('notes-box').value
             };
 
             try {
-                const response = await fetch('/generate_report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
+                const response = await fetch('/generate_report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const result = await response.json();
-
                 if (response.ok) {
                     reportBox.value = result.report;
+                    lastAiReport = result.report; // Update the last known AI version
                     updateVersionDisplay(result.version);
-                    updateEditLog(result.edit_log); // Update log UI
-                    promptBox.value = ''; 
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert('An unexpected error during report generation.');
-            } finally {
-                hideLoader();
-            }
+                    updateEditLog(result.edit_log);
+                    promptBox.value = '';
+                } else { alert(`Error: ${result.error}`); }
+            } catch (error) { alert('An unexpected error during report generation.'); } finally { hideLoader(); }
         });
 
-        // --- Handle Revert ---
         revertButton.addEventListener('click', async () => {
-            // ... (rest of the revert logic)
             if (!confirm('Are you sure you want to revert to the previous version?')) return;
-
             showLoader('Reverting report...');
             try {
                 const response = await fetch('/revert', { method: 'POST' });
                 const result = await response.json();
-
                 if (response.ok) {
                     reportBox.value = result.report;
+                    lastAiReport = result.report; // Update state after revert
                     updateVersionDisplay(result.version);
-                    updateEditLog(result.edit_log); // Update log UI
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert('An unexpected error while reverting.');
-            } finally {
-                hideLoader();
-            }
+                    updateEditLog(result.edit_log);
+                } else { alert(`Error: ${result.error}`); }
+            } catch (error) { alert('An unexpected error while reverting.'); } finally { hideLoader(); }
         });
     </script>
 </body>
