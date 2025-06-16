@@ -125,8 +125,12 @@ def generate_report():
     # The new instruction from the user, which may include a note about manual edits
     new_instruction = data['prompt']
     
-    # Add the edit to the log
-    session.setdefault('edit_log', []).append(new_instruction)
+    # Ensure edit_log is a list, append the new instruction, and explicitly update the session
+    edit_log_current = session.get('edit_log', [])
+    edit_log_current.append(new_instruction)
+    session['edit_log'] = edit_log_current # Explicitly reassign the list to session
+    session.modified = True # Ensure the session is marked as modified after list update
+    
     app.logger.info(f"New instruction added to edit log: '{new_instruction}'")
     
     #... (The rest of the logic is the same as before)
