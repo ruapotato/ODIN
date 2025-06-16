@@ -1,4 +1,4 @@
-# transcribe.py - v3 with Ollama unload command
+# transcribe.py - v3.1 with missing import fixed
 
 import torch
 import torchaudio
@@ -6,9 +6,10 @@ import os
 import sys
 import logging
 import traceback
-import requests  # Added for API calls
-import json      # Added for API calls
-from pyannote.audio import Pipeline
+import requests
+import json
+from pyannote.audio import Pipeline  # <-- THIS WAS THE MISSING LINE
+from faster_whisper import WhisperModel
 
 # --- Configuration ---
 OLLAMA_MODEL_TO_UNLOAD = "mistral"
@@ -24,20 +25,16 @@ def unload_ollama_model(model_name, api_url):
     try:
         payload = {"name": model_name}
         logging.info(f"Attempting to unload Ollama model '{model_name}' to free VRAM...")
-        # A short timeout is fine, as this should be a quick operation.
         response = requests.post(api_url, json=payload, timeout=15)
         
         if response.status_code == 200:
             logging.info(f"Request to unload Ollama model '{model_name}' sent successfully.")
-        # Ollama returns 404 if you try to unload a model that isn't loaded. This is not an error.
         elif response.status_code == 404:
             logging.info(f"Ollama model '{model_name}' was not loaded, so no action was needed.")
         else:
-            # Log other, unexpected errors.
             logging.error(f"Failed to unload Ollama model '{model_name}'. Status: {response.status_code}, Response: {response.text}")
             
     except requests.exceptions.RequestException:
-        # This is not a critical error; Ollama might simply not be running.
         logging.warning(f"Could not connect to Ollama server at {api_url} to unload model. It may not be running.")
     except Exception as e:
         logging.error(f"An unexpected error occurred while trying to unload Ollama model: {e}")
@@ -46,11 +43,8 @@ def process_audio(input_audio_path):
     """
     Processes a single audio file for speaker diarization and transcription.
     """
-    # --- STEP 0: UNLOAD OLLAMA MODEL ---
-    # This is called first to maximize chances of having free VRAM.
     unload_ollama_model(OLLAMA_MODEL_TO_UNLOAD, OLLAMA_API_URL)
 
-    # --- The rest of the script continues as before ---
     if not os.path.exists(input_audio_path):
         logging.error(f"Input file not found: {input_audio_path}")
         return
@@ -74,7 +68,7 @@ def process_audio(input_audio_path):
     logging.info("Attempting to load diarization and ASR models...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cuda":
-        torch.cuda.empty_cache() # Added as an extra precaution
+        torch.cuda.empty_cache()
         logging.info("Cleared PyTorch CUDA cache.")
 
     compute_type = "float16" if device == "cuda" else "int8"
