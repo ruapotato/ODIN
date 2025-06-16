@@ -31,10 +31,10 @@ This project relies on a modern, robust stack for audio processing:
 
     ```bash
     # Create a virtual environment in a folder named .venv
-    python3 -m venv .venv
+    python3 -m venv pyenv
 
     # Activate the environment
-    source .venv/bin/activate
+    source pyenv/bin/activate
     ```
 
 2.  **Install PyTorch with CUDA Support:**
