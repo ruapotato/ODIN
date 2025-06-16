@@ -43,6 +43,7 @@ This project relies on a modern, robust stack for audio processing:
     ```
     # For CUDA 12.1 - check the PyTorch website for other versions
     pip install torch torchvision torchaudio
+    pip install Flask Werkzeug requests moviepy
     ```
 
 3.  **Install Project Libraries:**
